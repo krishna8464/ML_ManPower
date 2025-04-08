@@ -1,6 +1,7 @@
 const express = require("express");
 const {connection} = require("./config/db");
-const { Adminrouter } = require("./routes/adminroute")
+const { Adminrouter } = require("./routes/adminroute");
+const {Projectrouter } = require("./routes/projectroute");
 require("dotenv").config();
 const cors = require("cors")
 
@@ -24,6 +25,7 @@ app.get("/",async(req,res)=>{
 });
 
  app.use("/admin",Adminrouter);
+ app.use("/project",Projectrouter);
 
 // Handle invalid routes
 app.use(logger,(req, res) => {
