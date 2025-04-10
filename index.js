@@ -2,6 +2,8 @@ const express = require("express");
 const {connection} = require("./config/db");
 const { Adminrouter } = require("./routes/adminroute");
 const {Projectrouter } = require("./routes/projectroute");
+const { storeitemrouter } = require("./routes/storeitemroute");
+const { Labourrouter } = require("./routes/labourroute");
 require("dotenv").config();
 const cors = require("cors")
 
@@ -26,6 +28,8 @@ app.get("/",async(req,res)=>{
 
  app.use("/admin",Adminrouter);
  app.use("/project",Projectrouter);
+ app.use("/store",storeitemrouter);
+ app.use("/labour",Labourrouter);
 
 // Handle invalid routes
 app.use(logger,(req, res) => {

@@ -1,5 +1,6 @@
 const express = require("express");
 const { body, validationResult } = require("express-validator");
+const { authMiddleware } = require("../middleware/auth");
 const {
   welcomeToProject,
   addProject,
@@ -14,13 +15,13 @@ const {
 const Projectrouter = express.Router();
 
 Projectrouter.get("/", welcomeToProject);
-Projectrouter.get("/filter",getFilteredProjects);
-Projectrouter.post("/add",addProject);
-Projectrouter.get("/all", getAllProjects);
-Projectrouter.get("/getcount",getTotalProjects);
-Projectrouter.get("/:id", getProjectById);
-Projectrouter.delete("/:id", deleteProject);
-Projectrouter.put("/:id", updateProject);
+Projectrouter.get("/filter",authMiddleware,getFilteredProjects);
+Projectrouter.post("/add",authMiddleware,addProject);
+Projectrouter.get("/all",authMiddleware, getAllProjects);
+Projectrouter.get("/getcount",authMiddleware,getTotalProjects);
+Projectrouter.get("/:id",authMiddleware, getProjectById);
+Projectrouter.delete("/:id",authMiddleware, deleteProject);
+Projectrouter.put("/:id",authMiddleware, updateProject);
 
 
 
