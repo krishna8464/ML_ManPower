@@ -14,6 +14,8 @@ const storeItemSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
+},{
+    versionKey: false
 });
 
 const StoreItem = mongoose.model('StoreItem', storeItemSchema);

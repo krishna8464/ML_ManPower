@@ -32,6 +32,8 @@ const labourSchema = new mongoose.Schema({
         type: String,
         default: '',
     },
+},{
+    versionKey: false
 });
 
 const Labour = mongoose.model('Labour', labourSchema);

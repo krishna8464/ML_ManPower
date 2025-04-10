@@ -7,7 +7,7 @@ const adminSchema = new mongoose.Schema({
   contact: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   access_level: { type: String, default: "admin" },
-}, { timestamps: true });
+}, { timestamps: true },{versionKey: false});
 
 // Hash password before saving
 adminSchema.pre("save", async function (next) {

@@ -20,7 +20,7 @@ Labourrouter.get("/filter", authMiddleware, getFilteredLabours);
 Labourrouter.post("/add", authMiddleware, createLabour);
 Labourrouter.get("/all", authMiddleware, getAllLabours);
 Labourrouter.get("/:id", authMiddleware, getLabourById);
-Labourrouter.put("/:id", authMiddleware, updateLabour);
+Labourrouter.patch("/:id", authMiddleware, updateLabour);
 Labourrouter.delete("/:id", authMiddleware, deleteLabour);
 
 module.exports = { Labourrouter };

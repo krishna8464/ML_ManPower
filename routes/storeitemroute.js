@@ -27,7 +27,7 @@ storeitemrouter.get('/filter',authMiddleware, getFilteredStoreItems);
 storeitemrouter.get('/:id',authMiddleware, getStoreItemById);
 
 // ✅ Update a store item by ID
-storeitemrouter.put('/:id',authMiddleware, updateStoreItem);
+storeitemrouter.patch('/:id',authMiddleware, updateStoreItem);
 
 // ✅ Delete a store item by ID
 storeitemrouter.delete('/:id',authMiddleware, deleteStoreItem);

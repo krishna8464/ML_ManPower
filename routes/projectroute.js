@@ -21,7 +21,7 @@ Projectrouter.get("/all",authMiddleware, getAllProjects);
 Projectrouter.get("/getcount",authMiddleware,getTotalProjects);
 Projectrouter.get("/:id",authMiddleware, getProjectById);
 Projectrouter.delete("/:id",authMiddleware, deleteProject);
-Projectrouter.put("/:id",authMiddleware, updateProject);
+Projectrouter.patch("/:id",authMiddleware, updateProject);
 
 
 
