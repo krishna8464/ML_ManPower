@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const manpowerRecordSchema = new mongoose.Schema({
   date: {
-    type: Date,
+    type: String, // Format: "YYYY-MM-DD"
     required: true
   },
   worker: {
@@ -11,21 +11,21 @@ const manpowerRecordSchema = new mongoose.Schema({
     required: true
   },
   worker_id: {
-    type: Number,  // Storing Worker_ID
+    type: Number, // Storing Worker_ID
     required: true
   },
   project: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Project",
-    required: true
+    required: false
   },
   msax_no: {
-    type: String,  // Storing MSAX_No
+    type: String, // Storing MSAX_No
     required: true
   },
   site_location: {
     type: String,
-    required: true  // Example: "Site A", "Warehouse", etc.
+    required: true // Example: "Site A", "Workshop", "Leave"
   },
   shift: {
     type: String,
@@ -34,7 +34,7 @@ const manpowerRecordSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ["Present", "Absent", "Leave"],
+    enum: ["Present", "Absent", "Emergency Leave", "Annual Leave", "Sick Leave",],
     default: "Present"
   },
   remark: {
@@ -49,6 +49,9 @@ const manpowerRecordSchema = new mongoose.Schema({
   timestamps: true,
   versionKey: false
 });
+
+// ✅ Add compound index to ensure only one record per worker per date
+manpowerRecordSchema.index({ worker: 1, date: 1 }, { unique: true });
 
 const ManpowerRecord = mongoose.model("ManpowerRecord", manpowerRecordSchema);
 module.exports = ManpowerRecord;

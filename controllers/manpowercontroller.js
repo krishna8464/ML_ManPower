@@ -19,7 +19,7 @@ const createManpower = async (req, res) => {
       const { worker, project, date, shift, site_location, status, remark } = req.body;
       const adminId = req.user.id;
   
-      // Fetch Labour by ObjectId
+      // Fetch Labour by ObjectId 
       const labourDoc = await Labour.findById(worker);
       if (!labourDoc) {
         return res.status(404).json({ message: "Labour not found" });
@@ -33,7 +33,7 @@ const createManpower = async (req, res) => {
   
       // Create Manpower Record
       const record = await Manpower.create({
-        date: new Date(date),
+        date: date,
         worker: labourDoc._id,
         worker_id: labourDoc.Worker_ID,
         project: projectDoc._id,
@@ -212,6 +212,119 @@ const getFilteredManpower = async (req, res) => {
   }
 };
 
+const getLaboursPendingAttendance = async (req, res) => {
+  try {
+    const { shift, search = "", page = 1, limit = 10 } = req.query;
+    let { date } = req.query;
+
+    if (!date) {
+      return res.status(400).json({ message: "Date is required" });
+    }
+
+    // ✅ Format date to YYYY-MM-DD
+    const dateObj = new Date(date);
+    date = dateObj.toISOString().split("T")[0];
+
+    const manpowerQuery = { date };
+    if (shift) manpowerQuery.shift = shift;
+
+    // 🔍 First fetch marked IDs only
+    const initialMarkedRecords = await Manpower.find(manpowerQuery).select("worker");
+    const markedWorkerIds = initialMarkedRecords.map(record => record.worker.toString());
+
+    // 🚫 Find unmarked leave labours
+    const leaveLabours = await Labour.find({
+      Status: "Leave",
+      _id: { $nin: markedWorkerIds }
+    });
+
+    const leaveManpowerRecords = [];
+
+    for (const labour of leaveLabours) {
+      const existing = await Manpower.findOne({ worker: labour._id, date });
+      if (existing) continue;
+
+      leaveManpowerRecords.push({
+        date,
+        worker: labour._id,
+        worker_id: labour.Worker_ID,
+        msax_no: labour.MSAX_No || "N/A",
+        shift: labour.Shift || shift || "DAY",
+        project: labour.Project && mongoose.Types.ObjectId.isValid(labour.Project)
+          ? labour.Project
+          : null,
+        site_location: labour.Site_Location?.toLowerCase() === "workshop" ? "Workshop" : "Leave",
+        status: "Leave",
+        remark: "Marked as Leave automatically",
+        assigned_by: req.user?._id || null,
+      });
+
+      markedWorkerIds.push(labour._id.toString());
+    }
+
+    // ✅ Insert leave records
+    if (leaveManpowerRecords.length > 0) {
+      await Manpower.insertMany(leaveManpowerRecords);
+    }
+
+    // 🔁 Re-fetch all manpower records for updated stats
+    const markedRecords = await Manpower.find(manpowerQuery).select("worker status site_location");
+
+    // 🔍 Pending labours
+    const query = {
+      Status: { $ne: "Leave" },
+      _id: { $nin: markedWorkerIds },
+    };
+    if (shift) query.Shift = shift;
+
+    if (search) {
+      query.$or = [
+        { Name: { $regex: search, $options: "i" } }
+      ];
+      if (!isNaN(Number(search))) {
+        query.$or.push({ Worker_ID: Number(search) });
+      }
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const totalPending = await Labour.countDocuments(query);
+    const labours = await Labour.find(query).skip(skip).limit(parseInt(limit));
+
+    // ✅ Attendance stats
+    const totalPresent = markedRecords.filter(r => r.status === "Present").length;
+    const totalLeave = markedRecords.filter(r => r.status === "Leave").length;
+
+    const siteCount = markedRecords.filter(
+      r => r.status === "Present" && r.site_location?.toLowerCase() !== "workshop"
+    ).length;
+
+    const workshopCount = markedRecords.filter(
+      r => r.status === "Present" && r.site_location?.toLowerCase() === "workshop"
+    ).length;
+
+    res.json({
+      totalPending,
+      totalPresent,
+      totalLeave,
+      siteCount,
+      workshopCount,
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(totalPending / limit),
+      labours
+    });
+
+  } catch (error) {
+    console.error("Error fetching labours:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+
+
+
+
+
+
 module.exports = {
   welcomeToManpower,
   createManpower,
@@ -220,4 +333,5 @@ module.exports = {
   updateManpower,
   deleteManpower,
   getFilteredManpower,
+  getLaboursPendingAttendance
 };

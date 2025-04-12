@@ -7,12 +7,15 @@ const {
   updateManpower,
   deleteManpower,
   getFilteredManpower,
-} = require("../controllers/manpowercontroller");
+  getLaboursPendingAttendance
 
+} = require("../controllers/manpowercontroller");
+  
 const { authMiddleware } = require("../middleware/auth");
 
 const Manpowerrouter = express.Router();
 
+Manpowerrouter.get("/attendance-summary", authMiddleware, getLaboursPendingAttendance);
 Manpowerrouter.get("/", welcomeToManpower);
 Manpowerrouter.post("/add", authMiddleware, createManpower);
 Manpowerrouter.get("/all", authMiddleware, getAllManpower);
