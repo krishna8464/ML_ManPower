@@ -49,20 +49,33 @@ const getLabourById = async (req, res) => {
 
 // Update labour
 const updateLabour = async (req, res) => {
-    try {
-        const labour = await Labour.findOneAndUpdate(
-            { _id: req.params.id },
-            req.body,
-            { new: true, runValidators: true }
-        );
-        if (!labour) {
-            return res.status(404).json({ message: 'Labour not found' });
-        }
-        res.json(labour);
-    } catch (err) {
-        res.status(400).json({ error: err.message });
-    }
+  try {
+      const { Status } = req.body;
+
+      // List of statuses that also update Working_Status
+      const leaveStatus = ['Inactive', 'Emergency Leave', 'Annual Leave'];
+
+      // If the Status is one of the special leave types, also set Working_Status
+      if (leaveStatus.includes(Status)) {
+          req.body.Working_Status = Status;
+      }
+
+      const labour = await Labour.findOneAndUpdate(
+          { _id: req.params.id },
+          req.body,
+          { new: true, runValidators: true }
+      );
+
+      if (!labour) {
+          return res.status(404).json({ message: 'Labour not found' });
+      }
+
+      res.json(labour);
+  } catch (err) {
+      res.status(400).json({ error: err.message });
+  }
 };
+
 
 // Delete labour
 const deleteLabour = async (req, res) => {

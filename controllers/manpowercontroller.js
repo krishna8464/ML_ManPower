@@ -16,66 +16,91 @@ const welcomeToManpower = async (req, res) => {
 // Create manpower record
 const createManpower = async (req, res) => {
   try {
-    const { worker, project, date, shift, site_location, status, remark } = req.body;
+    const records = req.body.records; // Expecting array of manpower records
     const adminId = req.user.id;
 
-    // 1. Fetch Labour
-    const labourDoc = await Labour.findById(worker);
-    if (!labourDoc) {
-      return res.status(404).json({ message: "Labour not found" });
+    if (!Array.isArray(records) || records.length === 0) {
+      return res.status(400).json({ message: "No manpower records provided" });
     }
 
-    // ❌ Reject if labour is not active
-    if (labourDoc.Status !== "Active") {
-      return res.status(400).json({ message: "Cannot assign manpower to inactive labour" });
-    }
-
-    // Define leave-type statuses
     const leaveStatuses = ["Sick Leave", "Emergency Leave", "Annual Leave", "Absent"];
+    const toInsert = [];
+    const skipped = [];
 
-    let manpowerData = {
-      date,
-      worker: labourDoc._id,
-      worker_id: labourDoc.Worker_ID,
-      shift: labourDoc.Shift || shift || "DAY",
-      msax_no: "N/A", // default
-      status,
-      assigned_by: adminId
-    };
+    for (const record of records) {
+      const { worker, project, date, shift, site_location, status, remark } = record;
 
-    if (leaveStatuses.includes(status)) {
-      // Leave entry logic
-      manpowerData.project = null;
-      manpowerData.site_location = null;
-      manpowerData.remark = remark || "Marked as Leave manually";
-    } else {
-      // Normal entry logic
-      const projectDoc = await Project.findById(project);
-      if (!projectDoc) {
-        return res.status(404).json({ message: "Project not found" });
+      const labourDoc = await Labour.findById(worker);
+      if (!labourDoc || labourDoc.Status !== "Active") {
+        skipped.push({ worker, reason: "Labour not found or not active" });
+        continue;
       }
 
-      manpowerData.project = projectDoc._id;
-      manpowerData.msax_no = projectDoc.MSAX_No || "N/A";
-      manpowerData.site_location = site_location;
-      manpowerData.remark = remark || "";
+      let manpowerData = {
+        date,
+        worker: labourDoc._id,
+        worker_id: labourDoc.Worker_ID,
+        shift: labourDoc.Shift || shift || "DAY",
+        msax_no: "N/A",
+        status,
+        assigned_by: adminId,
+      };
+
+      if (leaveStatuses.includes(status)) {
+        // Leave record
+        manpowerData.project = null;
+        manpowerData.site_location = null;
+        manpowerData.remark = remark || "Marked as Leave manually";
+      } else if (project === "MLOVERHEAD") {
+        // Company work record
+        manpowerData.project = null;
+        manpowerData.msax_no = "MLOVERHEAD";
+        manpowerData.site_location = site_location || "Company Work";
+        manpowerData.remark = remark || "Company Overhead Work";
+      } else {
+        // Normal present record
+        const projectDoc = await Project.findById(project);
+        if (!projectDoc) {
+          skipped.push({ worker, reason: "Project not found" });
+          continue;
+        }
+
+        manpowerData.project = projectDoc._id;
+        manpowerData.msax_no = projectDoc.MSAX_No || "N/A";
+        manpowerData.site_location = site_location;
+        manpowerData.remark = remark || "";
+      }
+
+      // Push record to insert array
+      toInsert.push(manpowerData);
+
+      // 🔄 Update Labour.Working_Status
+      await Labour.findByIdAndUpdate(
+        labourDoc._id,
+        { Working_Status: status },
+        { new: true }
+      );
     }
 
-    const record = await Manpower.create(manpowerData);
+    // Insert all manpower records
+    const inserted = await Manpower.insertMany(toInsert, { ordered: false }).catch(err => {
+      if (err.code === 11000) {
+        console.warn("Duplicate record error in bulk insert");
+      }
+    });
 
     res.status(201).json({
-      message: "Manpower record created successfully",
-      data: record
+      message: "Bulk manpower creation complete",
+      insertedCount: toInsert.length,
+      skipped,
     });
 
   } catch (error) {
-    if (error.code === 11000) {
-      return res.status(400).json({ message: "Manpower record for this labour already exists for the selected date." });
-    }
-    console.error("Error in createManpower:", error);
-    res.status(400).json({ message: "Failed to create record", error: error.message });
+    console.error("Error in bulk creation:", error);
+    res.status(500).json({ message: "Bulk manpower creation failed", error: error.message });
   }
 };
+
 
   
 
@@ -244,97 +269,94 @@ const getLaboursPendingAttendance = async (req, res) => {
     const { shift, search = "", page = 1, limit = 10 } = req.query;
     let { date } = req.query;
 
-    if (!date) {
-      return res.status(400).json({ message: "Date is required" });
-    }
+    if (!date) return res.status(400).json({ message: "Date is required" });
 
-    // ✅ Format date to YYYY-MM-DD
-    const dateObj = new Date(date);
-    date = dateObj.toISOString().split("T")[0];
+    date = new Date(date).toISOString().split("T")[0];
 
     const manpowerQuery = { date };
     if (shift) manpowerQuery.shift = shift;
 
-    // 🔍 First fetch marked IDs only
-    const initialMarkedRecords = await Manpower.find(manpowerQuery).select("worker");
-    const markedWorkerIds = initialMarkedRecords.map(record => record.worker.toString());
+    // 🔍 Get already marked workers
+    const initialMarkedRecords = await Manpower.find(manpowerQuery).select("worker status site_location shift");
+    const markedWorkerIds = initialMarkedRecords.map(r => r.worker.toString());
 
-    // 🚫 Find unmarked leave labours
-    const leaveLabours = await Labour.find({
-      Status: "Leave",
+    // ✅ Auto-mark Emergency Leave & Annual Leave labours
+    const leaveTypes = ["Emergency Leave", "Annual Leave"];
+    const autoLeaveLabours = await Labour.find({
+      Status: { $in: leaveTypes },
       _id: { $nin: markedWorkerIds }
     });
 
-    const leaveManpowerRecords = [];
+    const autoLeaveRecords = autoLeaveLabours.map(labour => ({
+      date,
+      worker: labour._id,
+      worker_id: labour.Worker_ID,
+      msax_no: labour.MSAX_No || "N/A",
+      shift: labour.Shift || shift || "DAY",
+      project: labour.Project && mongoose.Types.ObjectId.isValid(labour.Project)
+        ? labour.Project
+        : null,
+      site_location: "Leave",
+      status: labour.Status, // "Emergency Leave" or "Annual Leave"
+      remark: `${labour.Status} (auto-marked)`,
+      assigned_by: req.user?._id || null,
+    }));
 
-    for (const labour of leaveLabours) {
-      const existing = await Manpower.findOne({ worker: labour._id, date });
-      if (existing) continue;
-
-      leaveManpowerRecords.push({
-        date,
-        worker: labour._id,
-        worker_id: labour.Worker_ID,
-        msax_no: labour.MSAX_No || "N/A",
-        shift: labour.Shift || shift || "DAY",
-        project: labour.Project && mongoose.Types.ObjectId.isValid(labour.Project)
-          ? labour.Project
-          : null,
-        site_location: labour.Site_Location?.toLowerCase() === "workshop" ? "Workshop" : "Leave",
-        status: "Leave",
-        remark: "Marked as Leave automatically",
-        assigned_by: req.user?._id || null,
-      });
-
-      markedWorkerIds.push(labour._id.toString());
+    if (autoLeaveRecords.length > 0) {
+      await Manpower.insertMany(autoLeaveRecords);
     }
 
-    // ✅ Insert leave records
-    if (leaveManpowerRecords.length > 0) {
-      await Manpower.insertMany(leaveManpowerRecords);
-    }
+    // 🔄 Refresh Manpower records for stats after auto-inserts
+    const updatedMarkedRecords = await Manpower.find(manpowerQuery).select("worker status site_location shift");
+    const updatedMarkedIds = updatedMarkedRecords.map(r => r.worker.toString());
 
-    // 🔁 Re-fetch all manpower records for updated stats
-    const markedRecords = await Manpower.find(manpowerQuery).select("worker status site_location");
-
-    // 🔍 Pending labours
-    const query = {
-      Status: { $ne: "Leave" },
-      _id: { $nin: markedWorkerIds },
+    // 🔍 Find labours still not marked
+    const pendingQuery = {
+      Status: { $nin: leaveTypes },
+      _id: { $nin: updatedMarkedIds },
     };
-    if (shift) query.Shift = shift;
+    if (shift) pendingQuery.Shift = shift;
 
     if (search) {
-      query.$or = [
+      pendingQuery.$or = [
         { Name: { $regex: search, $options: "i" } }
       ];
       if (!isNaN(Number(search))) {
-        query.$or.push({ Worker_ID: Number(search) });
+        pendingQuery.$or.push({ Worker_ID: Number(search) });
       }
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const totalPending = await Labour.countDocuments(query);
-    const labours = await Labour.find(query).skip(skip).limit(parseInt(limit));
+    const totalPending = await Labour.countDocuments(pendingQuery);
+    const labours = await Labour.find(pendingQuery).skip(skip).limit(parseInt(limit));
 
-    // ✅ Attendance stats
-    const totalPresent = markedRecords.filter(r => r.status === "Present").length;
-    const totalLeave = markedRecords.filter(r => r.status === "Leave").length;
+    // ✅ Calculate stats
+    const totalPresent = updatedMarkedRecords.filter(r => r.status === "Present").length;
+    const totalLeave = updatedMarkedRecords.filter(r => ["Absent", "Sick Leave"].includes(r.status)).length;
+    const totalAnnualLeave = updatedMarkedRecords.filter(r => r.status === "Annual Leave").length;
+    const totalEmergencyLeave = updatedMarkedRecords.filter(r => r.status === "Emergency Leave").length;
 
-    const siteCount = markedRecords.filter(
-      r => r.status === "Present" && r.site_location?.toLowerCase() !== "workshop"
+    const siteCount = updatedMarkedRecords.filter(r =>
+      r.status === "Present" && r.site_location?.toLowerCase() !== "workshop"
     ).length;
 
-    const workshopCount = markedRecords.filter(
-      r => r.status === "Present" && r.site_location?.toLowerCase() === "workshop"
+    const workshopCount = updatedMarkedRecords.filter(r =>
+      r.status === "Present" && r.site_location?.toLowerCase() === "workshop"
     ).length;
+
+    const dayPresentCount = updatedMarkedRecords.filter(r => r.status === "Present" && r.shift === "DAY").length;
+    const nightPresentCount = updatedMarkedRecords.filter(r => r.status === "Present" && r.shift === "NIGHT").length;
 
     res.json({
       totalPending,
       totalPresent,
       totalLeave,
+      totalAnnualLeave,
+      totalEmergencyLeave,
       siteCount,
       workshopCount,
+      dayPresentCount,
+      nightPresentCount,
       currentPage: parseInt(page),
       totalPages: Math.ceil(totalPending / limit),
       labours
@@ -345,6 +367,9 @@ const getLaboursPendingAttendance = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
+
+
 
 
 
