@@ -19,6 +19,11 @@ const labourSchema = new mongoose.Schema({
         enum: ['Active', 'Inactive'],
         default: 'Active',
     },
+    Working_Status:{
+        type: String,
+        enum: ['Present', 'Absent', 'Emergency Leave', 'Annual Leave', 'Sick Leave'],
+        default: 'Present',
+    },
     Shift: {
         type: String,
         enum: ['DAY', 'NIGHT'],

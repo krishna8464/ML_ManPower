@@ -15,41 +15,68 @@ const welcomeToManpower = async (req, res) => {
 
 // Create manpower record
 const createManpower = async (req, res) => {
-    try {
-      const { worker, project, date, shift, site_location, status, remark } = req.body;
-      const adminId = req.user.id;
-  
-      // Fetch Labour by ObjectId 
-      const labourDoc = await Labour.findById(worker);
-      if (!labourDoc) {
-        return res.status(404).json({ message: "Labour not found" });
-      }
-  
-      // Fetch Project by ObjectId
+  try {
+    const { worker, project, date, shift, site_location, status, remark } = req.body;
+    const adminId = req.user.id;
+
+    // 1. Fetch Labour
+    const labourDoc = await Labour.findById(worker);
+    if (!labourDoc) {
+      return res.status(404).json({ message: "Labour not found" });
+    }
+
+    // ❌ Reject if labour is not active
+    if (labourDoc.Status !== "Active") {
+      return res.status(400).json({ message: "Cannot assign manpower to inactive labour" });
+    }
+
+    // Define leave-type statuses
+    const leaveStatuses = ["Sick Leave", "Emergency Leave", "Annual Leave", "Absent"];
+
+    let manpowerData = {
+      date,
+      worker: labourDoc._id,
+      worker_id: labourDoc.Worker_ID,
+      shift: labourDoc.Shift || shift || "DAY",
+      msax_no: "N/A", // default
+      status,
+      assigned_by: adminId
+    };
+
+    if (leaveStatuses.includes(status)) {
+      // Leave entry logic
+      manpowerData.project = null;
+      manpowerData.site_location = null;
+      manpowerData.remark = remark || "Marked as Leave manually";
+    } else {
+      // Normal entry logic
       const projectDoc = await Project.findById(project);
       if (!projectDoc) {
         return res.status(404).json({ message: "Project not found" });
       }
-  
-      // Create Manpower Record
-      const record = await Manpower.create({
-        date: date,
-        worker: labourDoc._id,
-        worker_id: labourDoc.Worker_ID,
-        project: projectDoc._id,
-        msax_no: projectDoc.MSAX_No,
-        site_location,
-        shift,
-        status,
-        remark,
-        assigned_by: adminId
-      });
-  
-      res.status(201).json({ message: "Manpower record created successfully", data: record });
-    } catch (error) {
-      res.status(400).json({ message: "Failed to create record", error: error.message });
+
+      manpowerData.project = projectDoc._id;
+      manpowerData.msax_no = projectDoc.MSAX_No || "N/A";
+      manpowerData.site_location = site_location;
+      manpowerData.remark = remark || "";
     }
-  };
+
+    const record = await Manpower.create(manpowerData);
+
+    res.status(201).json({
+      message: "Manpower record created successfully",
+      data: record
+    });
+
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ message: "Manpower record for this labour already exists for the selected date." });
+    }
+    console.error("Error in createManpower:", error);
+    res.status(400).json({ message: "Failed to create record", error: error.message });
+  }
+};
+
   
 
 // Get all manpower records

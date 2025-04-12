@@ -20,12 +20,12 @@ const manpowerRecordSchema = new mongoose.Schema({
     required: false
   },
   msax_no: {
-    type: String, // Storing MSAX_No
+    type: String, // Storing MSAX_No 
     required: true
   },
   site_location: {
     type: String,
-    required: true // Example: "Site A", "Workshop", "Leave"
+    required: false // Example: "Site A", "Workshop", "Leave"
   },
   shift: {
     type: String,
