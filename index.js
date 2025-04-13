@@ -19,7 +19,8 @@ app.use(express.json());
 app.use(logger);
 app.use(errorHandler);
 app.use(cors({
-    origin:"*"
+    origin:"*",
+    credentials: true
 }));
 
 app.get("/",async(req,res)=>{
