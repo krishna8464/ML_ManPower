@@ -1,10 +1,12 @@
 const express = require("express");
+const cookieParser = require("cookie-parser");
 const {connection} = require("./config/db");
 const { Adminrouter } = require("./routes/adminroute");
 const {Projectrouter } = require("./routes/projectroute");
 const { storeitemrouter } = require("./routes/storeitemroute");
 const { Labourrouter } = require("./routes/labourroute");
 const { Manpowerrouter } = require("./routes/manpowerroute");
+
 require("dotenv").config();
 const cors = require("cors")
 
@@ -12,6 +14,7 @@ const { logger } = require("./middleware/logger");
 const { errorHandler } = require("./middleware/errorhandler");
 
 const app = express();
+app.use(cookieParser());
 app.use(express.json());
 app.use(logger);
 app.use(errorHandler);

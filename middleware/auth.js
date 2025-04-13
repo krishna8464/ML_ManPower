@@ -6,17 +6,14 @@ const JWT_SECRET = process.env.JWT_SECRET || "ML_ManPower";
 
 const authMiddleware = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
+    const token = req.cookies.authToken;
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "Authorization token missing or malformed" });
+    if (!token) {
+      return res.status(401).json({ message: "Auth token missing in cookies" });
     }
 
-    const token = authHeader.split(" ")[1];
-
-    // Check if token is blacklisted or deactivated
+    // Check if token is active
     const existingToken = await Tocken.findOne({ token, is_active: true });
-
     if (!existingToken) {
       return res.status(403).json({ message: "Token is not active or has been logged out. Please login again." });
     }
@@ -25,9 +22,8 @@ const authMiddleware = async (req, res, next) => {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.user = {
       id: decoded.userid,
-      role: decoded.role || "admin" // default role as admin
+      role: decoded.role || "admin",
     };
-    // Optionally attach token info
     req.tokenInfo = existingToken;
 
     next();
