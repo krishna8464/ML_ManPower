@@ -6,11 +6,13 @@ const JWT_SECRET = process.env.JWT_SECRET || "ML_ManPower";
 
 const authMiddleware = async (req, res, next) => {
   try {
-    const token = req.cookies.authToken;
-
-    if (!token) {
-      return res.status(401).json({ message: "Auth token missing in cookies" });
+    // Get token from Authorization header: "Bearer <token>"
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "Authorization header missing or invalid" });
     }
+
+    const token = authHeader.split(" ")[1];
 
     // Check if token is active
     const existingToken = await Tocken.findOne({ token, is_active: true });

@@ -36,15 +36,8 @@ const login = async (req, res) => {
     // Save to DB
     await Tocken.create({ token, is_active: true, admin_id: admin._id });
 
-    // Set HttpOnly cookie
-    res.cookie("authToken", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // true in production (HTTPS)
-      sameSite: "Strict",
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
-    });
-
-    res.status(200).json({ message: "Login successful", admin });
+    // ✅ Send token in response body instead of cookies
+    res.status(200).json({ message: "Login successful", admin, token });
   } catch (err) {
     res.status(500).json({ message: "Login failed", error: err.message });
   }
@@ -52,9 +45,9 @@ const login = async (req, res) => {
 
 // Admin Logout
 const logout = async (req, res) => {
-  const token = req.cookies.authToken;
+  const token = req.headers.authorization?.split(" ")[1]; // Expecting: Bearer <token>
 
-  if (!token) return res.status(400).json({ message: "Token missing from cookies" });
+  if (!token) return res.status(400).json({ message: "Token missing in Authorization header" });
 
   try {
     const tokenDoc = await Tocken.findOne({ token, is_active: true });
@@ -64,13 +57,6 @@ const logout = async (req, res) => {
 
     tokenDoc.is_active = false;
     await tokenDoc.save();
-
-    // Clear the cookie
-    res.clearCookie("authToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "Strict",
-    });
 
     res.status(200).json({ message: "Logged out successfully" });
   } catch (err) {
