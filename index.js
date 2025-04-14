@@ -19,7 +19,7 @@ app.use(express.json());
 app.use(logger);
 app.use(errorHandler);
 app.use(cors({
-    origin:"https://krishna8464.github.io",
+    origin:"http://127.0.0.1:5500/",
     credentials: true
 }));
 // http://127.0.0.1:5500
