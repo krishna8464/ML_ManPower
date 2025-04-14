@@ -20,7 +20,7 @@ app.use(logger);
 app.use(errorHandler);
 app.use(cors({
     origin:"*",
-    credentials: true
+    // credentials: true
 }));
 // http://127.0.0.1:5500
 app.get("/",async(req,res)=>{
