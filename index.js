@@ -19,10 +19,10 @@ app.use(express.json());
 app.use(logger);
 app.use(errorHandler);
 app.use(cors({
-    origin:"http://127.0.0.1:5500",
+    origin:"*",
     credentials: true
 }));
-
+// http://127.0.0.1:5500
 app.get("/",async(req,res)=>{
     try {
         res.send("Welcome to the ML_ManPower server");
